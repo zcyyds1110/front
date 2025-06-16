@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>论文列表 - 论文评定系统</title>
+    <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+    <header>
+        <div class="header-content">
+            <h1>论文评定系统</h1>
+            <nav id="nav"></nav>
+        </div>
+    </header>
+    
+    <main class="container">
+        <h2>论文列表</h2>
+        
+        <div id="papersContainer" class="table-container">
+            <p>加载中...</p>
+        </div>
+    </main>
+    
+    <script src="../js/auth.js"></script>
+    <script src="../js/api.js"></script>
+    <script src="../js/paper.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // 检查权限
+            if (!auth.isAuthenticated()) {
+                window.location.href = '../login.html';
+                return;
+            }
+            
+            // 根据角色加载不同的论文列表
+            if (auth.getCurrentUserRole() === 'EXPERT') {
+                reviewManager.loadAssignedReviews();
+            } else {
+                paperManager.loadPapers();
+            }
+        });
+    </script>
+</body>
+</html>

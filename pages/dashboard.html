@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>仪表盘 - 论文评定系统</title>
+    <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+    <header>
+        <div class="header-content">
+            <h1>论文评定系统</h1>
+            <nav id="nav"></nav>
+        </div>
+    </header>
+    
+    <main class="container">
+        <h2>管理员仪表盘</h2>
+        
+        <div class="card">
+            <h3>论文统计</h3>
+            <div id="paperStats"></div>
+        </div>
+        
+        <div class="card">
+            <h3>操作</h3>
+            <button id="assignPapersBtn" class="btn">分配论文给专家</button>
+        </div>
+    </main>
+    
+    <script src="../js/auth.js"></script>
+    <script src="../js/api.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', async () => {
+            // 检查权限
+            if (!auth.checkPermission('ADMIN')) {
+                alert('无权访问此页面');
+                window.location.href = '../index.html';
+                return;
+            }
+            
+            // 加载统计数据
+            try {
+                const papers = await api.papers.getAll();
+                const pending = papers.data.filter(p => p.status === 'PENDING').length;
+                const assigned = papers.data.filter(p => p.status === 'ASSIGNED').length;
+                const reviewed = papers.data.filter(p => p.status === 'REVIEWED').length;
+                
+                document.getElementById('paperStats').innerHTML = `
+                    <p>待分配: ${pending}篇</p>
+                    <p>已分配: ${assigned}篇</p>
+                    <p>已评审: ${reviewed}篇</p>
+                `;
+            } catch (error) {
+                console.error('加载统计数据失败:', error);
+            }
+            
+            // 分配论文按钮
+            document.getElementById('assignPapersBtn').addEventListener('click', async () => {
+                if (confirm('确定要分配论文给专家吗？')) {
+                    try {
+                        await api.admin.assignPapers();
+                        alert('论文分配成功！');
+                        window.location.reload();
+                    } catch (error) {
+                        alert('分配失败: ' + error.message);
+                    }
+                }
+            });
+        });
+    </script>
+</body>
+</html>
