@@ -38,10 +38,11 @@ const auth = {
         
         // 根据角色重定向
         const role = this.getCurrentUserRole();
+        const isInPages = window.location.pathname.includes('/pages/');
         if (role === 'ADMIN') {
-            window.location.href = 'dashboard.html';
+            window.location.href = isInPages ? 'dashboard.html' : 'pages/dashboard.html';
         } else {
-            window.location.href = 'papers.html';
+            window.location.href = isInPages ? 'papers.html' : 'pages/papers.html';
         }
     },
     
@@ -50,7 +51,12 @@ const auth = {
      */
     logout() {
         localStorage.removeItem('token');
-        window.location.href = 'login.html';
+        // 检查当前是否在pages目录下
+        if (window.location.pathname.includes('/pages/')) {
+            window.location.href = 'login.html';
+        } else {
+            window.location.href = 'pages/login.html';
+        }
     },
     
     /**
@@ -58,7 +64,12 @@ const auth = {
      */
     protectRoute() {
         if (!this.isAuthenticated() && !window.location.pathname.endsWith('login.html')) {
-            window.location.href = 'login.html';
+            // 检查当前是否在pages目录下
+            if (window.location.pathname.includes('/pages/')) {
+                window.location.href = 'login.html';
+            } else {
+                window.location.href = 'pages/login.html';
+            }
         }
     },
     
@@ -85,23 +96,27 @@ const auth = {
         if (!navElement) return;
         
         const role = this.getCurrentUserRole();
+        const isInPages = window.location.pathname.includes('/pages/');
         let navItems = '';
         
         if (this.isAuthenticated()) {
+            const papersLink = isInPages ? 'papers.html' : 'pages/papers.html';
             navItems += `
-                <li><a href="papers.html">论文列表</a></li>
+                <li><a href="${papersLink}">论文列表</a></li>
                 <li><a href="#" id="logoutBtn">退出</a></li>
             `;
             
             if (role === 'ADMIN') {
+                const dashboardLink = isInPages ? 'dashboard.html' : 'pages/dashboard.html';
                 navItems = `
-                    <li><a href="dashboard.html">仪表盘</a></li>
-                    <li><a href="papers.html">论文管理</a></li>
+                    <li><a href="${dashboardLink}">仪表盘</a></li>
+                    <li><a href="${papersLink}">论文管理</a></li>
                     ${navItems}
                 `;
             }
         } else {
-            navItems = '<li><a href="login.html">登录</a></li>';
+            const loginLink = isInPages ? 'login.html' : 'pages/login.html';
+            navItems = `<li><a href="${loginLink}">登录</a></li>`;
         }
         
         navElement.innerHTML = `<ul>${navItems}</ul>`;

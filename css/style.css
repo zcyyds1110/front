@@ -161,6 +161,22 @@ tr:hover {
     color: #2c3e50;
 }
 
+/* 状态样式 */
+.status-pending {
+    color: #f39c12;
+    font-weight: bold;
+}
+
+.status-assigned {
+    color: #3498db;
+    font-weight: bold;
+}
+
+.status-reviewed {
+    color: #27ae60;
+    font-weight: bold;
+}
+
 /* 响应式设计 */
 @media (max-width: 768px) {
     .header-content {
