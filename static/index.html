@@ -1,0 +1,810 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>论文评定系统</title>
+    <link rel="stylesheet" href="https://unpkg.com/element-plus/dist/index.css">
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://unpkg.com/element-plus/dist/index.full.js"></script>
+    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+    <script src="https://unpkg.com/@element-plus/icons-vue/dist/index.iife.js"></script>
+    <style>
+        body {
+            margin: 0;
+            font-family: 'Helvetica Neue', Helvetica, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', '微软雅黑', Arial, sans-serif;
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 0 20px;
+            box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
+        }
+        .main-container {
+            min-height: calc(100vh - 60px);
+            background: #f5f7fa;
+        }
+        .sidebar {
+            background: white;
+            min-height: calc(100vh - 60px);
+            box-shadow: 2px 0 6px rgba(0, 0, 0, 0.1);
+        }
+        .content {
+            padding: 20px;
+            background: white;
+            margin: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
+        }
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .stat-number {
+            font-size: 2.5em;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        .stat-label {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+        .login-container {
+            min-height: 100vh;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .login-form {
+            background: white;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            width: 400px;
+        }
+        .review-form {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 20px;
+        }
+        .score-input {
+            margin-bottom: 15px;
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <!-- 登录页面 -->
+        <div v-if="!isLoggedIn" class="login-container">
+            <div class="login-form">
+                <h2 style="text-align: center; margin-bottom: 30px; color: #333;">论文评定系统</h2>
+                <el-form :model="loginForm" @submit.prevent="login">
+                    <el-form-item>
+                        <el-input v-model="loginForm.username" placeholder="用户名" size="large">
+                            <template #prefix>
+                                <el-icon><User /></el-icon>
+                            </template>
+                        </el-input>
+                    </el-form-item>
+                    <el-form-item>
+                        <el-input v-model="loginForm.password" type="password" placeholder="密码" size="large">
+                            <template #prefix>
+                                <el-icon><Lock /></el-icon>
+                            </template>
+                        </el-input>
+                    </el-form-item>
+                    <el-form-item>
+                        <el-button type="primary" size="large" style="width: 100%;" @click="login" :loading="loginLoading">
+                            登录
+                        </el-button>
+                    </el-form-item>
+                </el-form>
+                <div style="text-align: center; margin-top: 20px; color: #666; font-size: 14px;">
+                    默认管理员账户: admin / admin123
+                </div>
+            </div>
+        </div>
+
+        <!-- 主应用界面 -->
+        <div v-else>
+            <!-- 头部导航 -->
+            <el-header class="header" height="60px">
+                <el-row justify="space-between" align="middle" style="height: 100%;">
+                    <el-col :span="12">
+                        <h2 style="margin: 0;">论文评定系统</h2>
+                    </el-col>
+                    <el-col :span="12" style="text-align: right;">
+                        <span style="margin-right: 20px;">欢迎，{{ currentUser.name }}</span>
+                        <el-button type="primary" plain @click="logout">退出登录</el-button>
+                    </el-col>
+                </el-row>
+            </el-header>
+
+            <!-- 主体内容 -->
+            <el-container class="main-container">
+                <!-- 侧边栏 -->
+                <el-aside width="200px" class="sidebar">
+                    <el-menu :default-active="activeMenu" @select="handleMenuSelect" style="border: none;">
+                        <el-menu-item index="dashboard">
+                            <el-icon><Odometer /></el-icon>
+                            <span>数据概览</span>
+                        </el-menu-item>
+                        <el-menu-item index="papers" v-if="currentUser.role === 'admin'">
+                            <el-icon><Document /></el-icon>
+                            <span>论文管理</span>
+                        </el-menu-item>
+                        <el-menu-item index="users" v-if="currentUser.role === 'admin'">
+                            <el-icon><User /></el-icon>
+                            <span>用户管理</span>
+                        </el-menu-item>
+                        <el-menu-item index="assignments" v-if="currentUser.role === 'expert'">
+                            <el-icon><EditPen /></el-icon>
+                            <span>我的评审</span>
+                        </el-menu-item>
+                        <el-menu-item index="statistics">
+                            <el-icon><DataAnalysis /></el-icon>
+                            <span>统计分析</span>
+                        </el-menu-item>
+                    </el-menu>
+                </el-aside>
+
+                <!-- 主内容区 -->
+                <el-main>
+                    <!-- 数据概览 -->
+                    <div v-if="activeMenu === 'dashboard'" class="content">
+                        <h3>数据概览</h3>
+                        <el-row :gutter="20">
+                            <el-col :span="6">
+                                <div class="stat-card">
+                                    <div class="stat-number">{{ statistics.basic?.total_papers || 0 }}</div>
+                                    <div class="stat-label">论文总数</div>
+                                </div>
+                            </el-col>
+                            <el-col :span="6">
+                                <div class="stat-card">
+                                    <div class="stat-number">{{ statistics.basic?.total_experts || 0 }}</div>
+                                    <div class="stat-label">专家总数</div>
+                                </div>
+                            </el-col>
+                            <el-col :span="6">
+                                <div class="stat-card">
+                                    <div class="stat-number">{{ statistics.basic?.completed_papers || 0 }}</div>
+                                    <div class="stat-label">已完成评审</div>
+                                </div>
+                            </el-col>
+                            <el-col :span="6">
+                                <div class="stat-card">
+                                    <div class="stat-number">{{ statistics.basic?.total_reviews || 0 }}</div>
+                                    <div class="stat-label">评审总数</div>
+                                </div>
+                            </el-col>
+                        </el-row>
+                    </div>
+
+                    <!-- 论文管理 -->
+                    <div v-if="activeMenu === 'papers'" class="content">
+                        <el-row justify="space-between" align="middle" style="margin-bottom: 20px;">
+                            <h3>论文管理</h3>
+                            <el-button type="primary" @click="showAddPaperDialog = true">
+                                <el-icon><Plus /></el-icon>
+                                添加论文
+                            </el-button>
+                        </el-row>
+                        
+                        <el-table :data="papers" style="width: 100%">
+                            <el-table-column prop="title" label="标题" width="200" show-overflow-tooltip />
+                            <el-table-column prop="author" label="作者" width="120" />
+                            <el-table-column prop="field" label="研究领域" width="120" />
+                            <el-table-column prop="status" label="状态" width="100">
+                                <template #default="scope">
+                                    <el-tag :type="getStatusType(scope.row.status)">{{ getStatusText(scope.row.status) }}</el-tag>
+                                </template>
+                            </el-table-column>
+                            <el-table-column label="分配专家" width="200">
+                                <template #default="scope">
+                                    <div v-if="scope.row.experts.length > 0">
+                                        <el-tag v-for="expert in scope.row.experts" :key="expert.id" size="small" style="margin-right: 5px;">
+                                            {{ expert.name }}
+                                        </el-tag>
+                                    </div>
+                                    <span v-else style="color: #999;">未分配</span>
+                                </template>
+                            </el-table-column>
+                            <el-table-column prop="avg_score" label="平均分" width="100">
+                                <template #default="scope">
+                                    <span v-if="scope.row.avg_score">{{ scope.row.avg_score }}</span>
+                                    <span v-else style="color: #999;">-</span>
+                                </template>
+                            </el-table-column>
+                            <el-table-column label="操作" width="150">
+                                <template #default="scope">
+                                    <el-button v-if="scope.row.status === 'pending'" type="primary" size="small" @click="assignPaper(scope.row.id)">
+                                        分配专家
+                                    </el-button>
+                                    <el-button type="info" size="small" @click="viewPaperDetails(scope.row)">
+                                        详情
+                                    </el-button>
+                                </template>
+                            </el-table-column>
+                        </el-table>
+                    </div>
+
+                    <!-- 用户管理 -->
+                    <div v-if="activeMenu === 'users'" class="content">
+                        <el-row justify="space-between" align="middle" style="margin-bottom: 20px;">
+                            <h3>用户管理</h3>
+                            <el-button type="primary" @click="showAddUserDialog = true">
+                                <el-icon><Plus /></el-icon>
+                                添加用户
+                            </el-button>
+                        </el-row>
+                        
+                        <el-table :data="users" style="width: 100%">
+                            <el-table-column prop="username" label="用户名" width="120" />
+                            <el-table-column prop="name" label="姓名" width="120" />
+                            <el-table-column prop="email" label="邮箱" width="200" />
+                            <el-table-column prop="role" label="角色" width="100">
+                                <template #default="scope">
+                                    <el-tag :type="scope.row.role === 'admin' ? 'danger' : scope.row.role === 'expert' ? 'success' : 'info'">
+                                        {{ getRoleText(scope.row.role) }}
+                                    </el-tag>
+                                </template>
+                            </el-table-column>
+                            <el-table-column label="专业领域" width="200">
+                                <template #default="scope">
+                                    <el-tag v-for="field in scope.row.expertise" :key="field" size="small" style="margin-right: 5px;">
+                                        {{ field }}
+                                    </el-tag>
+                                </template>
+                            </el-table-column>
+                            <el-table-column prop="status" label="状态" width="100">
+                                <template #default="scope">
+                                    <el-tag :type="scope.row.status === 'active' ? 'success' : 'warning'">
+                                        {{ scope.row.status === 'active' ? '活跃' : '忙碌' }}
+                                    </el-tag>
+                                </template>
+                            </el-table-column>
+                        </el-table>
+                    </div>
+
+                    <!-- 我的评审 -->
+                    <div v-if="activeMenu === 'assignments'" class="content">
+                        <h3>我的评审任务</h3>
+                        <el-table :data="myAssignments" style="width: 100%">
+                            <el-table-column prop="paper.title" label="论文标题" width="250" show-overflow-tooltip />
+                            <el-table-column prop="paper.author" label="作者" width="120" />
+                            <el-table-column prop="paper.field" label="研究领域" width="120" />
+                            <el-table-column prop="status" label="状态" width="100">
+                                <template #default="scope">
+                                    <el-tag :type="scope.row.status === 'completed' ? 'success' : 'warning'">
+                                        {{ scope.row.status === 'completed' ? '已完成' : '待评审' }}
+                                    </el-tag>
+                                </template>
+                            </el-table-column>
+                            <el-table-column label="操作" width="150">
+                                <template #default="scope">
+                                    <el-button v-if="!scope.row.has_review" type="primary" size="small" @click="startReview(scope.row)">
+                                        开始评审
+                                    </el-button>
+                                    <el-button v-else type="info" size="small" disabled>
+                                        已评审
+                                    </el-button>
+                                </template>
+                            </el-table-column>
+                        </el-table>
+                    </div>
+
+                    <!-- 统计分析 -->
+                    <div v-if="activeMenu === 'statistics'" class="content">
+                        <h3>统计分析</h3>
+                        <el-row :gutter="20">
+                            <el-col :span="12">
+                                <el-card title="评审进度">
+                                    <div style="padding: 20px;">
+                                        <div v-for="(value, key) in statistics.progress" :key="key" style="margin-bottom: 10px;">
+                                            <span>{{ getProgressLabel(key) }}: </span>
+                                            <strong>{{ value }}</strong>
+                                        </div>
+                                    </div>
+                                </el-card>
+                            </el-col>
+                            <el-col :span="12">
+                                <el-card title="评分分布">
+                                    <div style="padding: 20px;">
+                                        <div v-for="(value, key) in statistics.score_distribution" :key="key" style="margin-bottom: 10px;">
+                                            <span>{{ key }}分: </span>
+                                            <strong>{{ value }}篇</strong>
+                                        </div>
+                                    </div>
+                                </el-card>
+                            </el-col>
+                        </el-row>
+                        
+                        <el-card title="专家工作量" style="margin-top: 20px;">
+                            <el-table :data="statistics.expert_workload" style="width: 100%">
+                                <el-table-column prop="name" label="专家姓名" />
+                                <el-table-column prop="current_assignments" label="当前任务" />
+                                <el-table-column prop="completed_reviews" label="已完成评审" />
+                                <el-table-column prop="total_assignments" label="总任务数" />
+                            </el-table>
+                        </el-card>
+                    </div>
+                </el-main>
+            </el-container>
+        </div>
+
+        <!-- 添加论文对话框 -->
+        <el-dialog v-model="showAddPaperDialog" title="添加论文" width="600px">
+            <el-form :model="paperForm" label-width="100px">
+                <el-form-item label="论文标题" required>
+                    <el-input v-model="paperForm.title" placeholder="请输入论文标题" />
+                </el-form-item>
+                <el-form-item label="作者" required>
+                    <el-input v-model="paperForm.author" placeholder="请输入作者姓名" />
+                </el-form-item>
+                <el-form-item label="研究领域">
+                    <el-input v-model="paperForm.field" placeholder="请输入研究领域" />
+                </el-form-item>
+                <el-form-item label="关键词">
+                    <el-input v-model="paperForm.keywords" placeholder="请输入关键词，用逗号分隔" />
+                </el-form-item>
+                <el-form-item label="摘要">
+                    <el-input v-model="paperForm.abstract" type="textarea" :rows="4" placeholder="请输入论文摘要" />
+                </el-form-item>
+            </el-form>
+            <template #footer>
+                <el-button @click="showAddPaperDialog = false">取消</el-button>
+                <el-button type="primary" @click="addPaper">确定</el-button>
+            </template>
+        </el-dialog>
+
+        <!-- 添加用户对话框 -->
+        <el-dialog v-model="showAddUserDialog" title="添加用户" width="600px">
+            <el-form :model="userForm" label-width="100px">
+                <el-form-item label="用户名" required>
+                    <el-input v-model="userForm.username" placeholder="请输入用户名" />
+                </el-form-item>
+                <el-form-item label="密码" required>
+                    <el-input v-model="userForm.password" type="password" placeholder="请输入密码" />
+                </el-form-item>
+                <el-form-item label="姓名" required>
+                    <el-input v-model="userForm.name" placeholder="请输入真实姓名" />
+                </el-form-item>
+                <el-form-item label="邮箱" required>
+                    <el-input v-model="userForm.email" placeholder="请输入邮箱地址" />
+                </el-form-item>
+                <el-form-item label="角色" required>
+                    <el-select v-model="userForm.role" placeholder="请选择角色">
+                        <el-option label="管理员" value="admin" />
+                        <el-option label="评审专家" value="expert" />
+                        <el-option label="查看者" value="viewer" />
+                    </el-select>
+                </el-form-item>
+                <el-form-item label="专业领域" v-if="userForm.role === 'expert'">
+                    <el-input v-model="expertiseInput" placeholder="请输入专业领域，用逗号分隔" />
+                </el-form-item>
+            </el-form>
+            <template #footer>
+                <el-button @click="showAddUserDialog = false">取消</el-button>
+                <el-button type="primary" @click="addUser">确定</el-button>
+            </template>
+        </el-dialog>
+
+        <!-- 评审对话框 -->
+        <el-dialog v-model="showReviewDialog" title="论文评审" width="800px">
+            <div v-if="currentAssignment">
+                <h4>{{ currentAssignment.paper.title }}</h4>
+                <p><strong>作者:</strong> {{ currentAssignment.paper.author }}</p>
+                <p><strong>研究领域:</strong> {{ currentAssignment.paper.field }}</p>
+                <p><strong>关键词:</strong> {{ currentAssignment.paper.keywords }}</p>
+                <p><strong>摘要:</strong> {{ currentAssignment.paper.abstract }}</p>
+                
+                <div class="review-form">
+                    <h4>评分标准</h4>
+                    <el-form :model="reviewForm" label-width="120px">
+                        <el-form-item label="学术创新性" class="score-input">
+                            <el-slider v-model="reviewForm.innovation_score" :max="30" show-input style="margin-right: 20px;" />
+                            <span style="color: #666; font-size: 12px;">（满分30分）</span>
+                        </el-form-item>
+                        <el-form-item label="技术可行性" class="score-input">
+                            <el-slider v-model="reviewForm.feasibility_score" :max="25" show-input style="margin-right: 20px;" />
+                            <span style="color: #666; font-size: 12px;">（满分25分）</span>
+                        </el-form-item>
+                        <el-form-item label="论文质量" class="score-input">
+                            <el-slider v-model="reviewForm.quality_score" :max="25" show-input style="margin-right: 20px;" />
+                            <span style="color: #666; font-size: 12px;">（满分25分）</span>
+                        </el-form-item>
+                        <el-form-item label="实用价值" class="score-input">
+                            <el-slider v-model="reviewForm.value_score" :max="20" show-input style="margin-right: 20px;" />
+                            <span style="color: #666; font-size: 12px;">（满分20分）</span>
+                        </el-form-item>
+                        <el-form-item label="总分">
+                            <el-input :value="totalScore" readonly style="width: 100px;" />
+                            <span style="margin-left: 10px; color: #666;">/ 100分</span>
+                        </el-form-item>
+                        <el-form-item label="评审意见">
+                            <el-input v-model="reviewForm.comments" type="textarea" :rows="4" placeholder="请输入评审意见" />
+                        </el-form-item>
+                    </el-form>
+                </div>
+            </div>
+            <template #footer>
+                <el-button @click="showReviewDialog = false">取消</el-button>
+                <el-button type="primary" @click="submitReview">提交评审</el-button>
+            </template>
+        </el-dialog>
+    </div>
+
+    <script>
+        const { createApp } = Vue;
+        const { ElMessage, ElMessageBox } = ElementPlus;
+
+        // 配置axios
+        axios.defaults.baseURL = 'http://localhost:5000';
+        axios.interceptors.request.use(config => {
+            const token = localStorage.getItem('token');
+            if (token) {
+                config.headers.Authorization = `Bearer ${token}`;
+            }
+            return config;
+        });
+
+        createApp({
+            data() {
+                return {
+                    isLoggedIn: false,
+                    loginLoading: false,
+                    currentUser: {},
+                    activeMenu: 'dashboard',
+                    
+                    // 登录表单
+                    loginForm: {
+                        username: '',
+                        password: ''
+                    },
+                    
+                    // 数据
+                    papers: [],
+                    users: [],
+                    myAssignments: [],
+                    statistics: {},
+                    
+                    // 对话框控制
+                    showAddPaperDialog: false,
+                    showAddUserDialog: false,
+                    showReviewDialog: false,
+                    
+                    // 表单数据
+                    paperForm: {
+                        title: '',
+                        author: '',
+                        field: '',
+                        keywords: '',
+                        abstract: ''
+                    },
+                    userForm: {
+                        username: '',
+                        password: '',
+                        name: '',
+                        email: '',
+                        role: ''
+                    },
+                    expertiseInput: '',
+                    
+                    // 评审相关
+                    currentAssignment: null,
+                    reviewForm: {
+                        innovation_score: 0,
+                        feasibility_score: 0,
+                        quality_score: 0,
+                        value_score: 0,
+                        comments: ''
+                    }
+                }
+            },
+            
+            computed: {
+                totalScore() {
+                    return this.reviewForm.innovation_score + 
+                           this.reviewForm.feasibility_score + 
+                           this.reviewForm.quality_score + 
+                           this.reviewForm.value_score;
+                }
+            },
+            
+            mounted() {
+                this.checkLogin();
+            },
+            
+            methods: {
+                // 检查登录状态
+                checkLogin() {
+                    const token = localStorage.getItem('token');
+                    const user = localStorage.getItem('user');
+                    if (token && user) {
+                        this.isLoggedIn = true;
+                        this.currentUser = JSON.parse(user);
+                        this.loadData();
+                    }
+                },
+                
+                // 登录
+                async login() {
+                    if (!this.loginForm.username || !this.loginForm.password) {
+                        ElMessage.error('请输入用户名和密码');
+                        return;
+                    }
+                    
+                    this.loginLoading = true;
+                    try {
+                        const response = await axios.post('/api/login', this.loginForm);
+                        if (response.data.success) {
+                            localStorage.setItem('token', response.data.token);
+                            localStorage.setItem('user', JSON.stringify(response.data.user));
+                            this.isLoggedIn = true;
+                            this.currentUser = response.data.user;
+                            this.loadData();
+                            ElMessage.success('登录成功');
+                        } else {
+                            ElMessage.error(response.data.message);
+                        }
+                    } catch (error) {
+                        ElMessage.error('登录失败，请检查网络连接');
+                    }
+                    this.loginLoading = false;
+                },
+                
+                // 退出登录
+                logout() {
+                    localStorage.removeItem('token');
+                    localStorage.removeItem('user');
+                    this.isLoggedIn = false;
+                    this.currentUser = {};
+                },
+                
+                // 菜单选择
+                handleMenuSelect(key) {
+                    this.activeMenu = key;
+                    this.loadData();
+                },
+                
+                // 加载数据
+                async loadData() {
+                    try {
+                        if (this.activeMenu === 'papers' && this.currentUser.role === 'admin') {
+                            await this.loadPapers();
+                        } else if (this.activeMenu === 'users' && this.currentUser.role === 'admin') {
+                            await this.loadUsers();
+                        } else if (this.activeMenu === 'assignments' && this.currentUser.role === 'expert') {
+                            await this.loadMyAssignments();
+                        } else if (this.activeMenu === 'statistics' || this.activeMenu === 'dashboard') {
+                            await this.loadStatistics();
+                        }
+                    } catch (error) {
+                        console.error('加载数据失败:', error);
+                    }
+                },
+                
+                // 加载论文列表
+                async loadPapers() {
+                    const response = await axios.get('/api/papers');
+                    if (response.data.success) {
+                        this.papers = response.data.papers;
+                    }
+                },
+                
+                // 加载用户列表
+                async loadUsers() {
+                    const response = await axios.get('/api/users');
+                    if (response.data.success) {
+                        this.users = response.data.users;
+                    }
+                },
+                
+                // 加载我的评审任务
+                async loadMyAssignments() {
+                    const response = await axios.get('/api/my-assignments');
+                    if (response.data.success) {
+                        this.myAssignments = response.data.assignments;
+                    }
+                },
+                
+                // 加载统计数据
+                async loadStatistics() {
+                    const response = await axios.get('/api/statistics');
+                    if (response.data.success) {
+                        this.statistics = response.data.statistics;
+                    }
+                },
+                
+                // 添加论文
+                async addPaper() {
+                    if (!this.paperForm.title || !this.paperForm.author) {
+                        ElMessage.error('请填写必要信息');
+                        return;
+                    }
+                    
+                    try {
+                        const response = await axios.post('/api/papers', this.paperForm);
+                        if (response.data.success) {
+                            ElMessage.success('论文添加成功');
+                            this.showAddPaperDialog = false;
+                            this.paperForm = { title: '', author: '', field: '', keywords: '', abstract: '' };
+                            this.loadPapers();
+                        } else {
+                            ElMessage.error(response.data.message);
+                        }
+                    } catch (error) {
+                        ElMessage.error('添加失败');
+                    }
+                },
+                
+               // 添加用户
+                async addUser() {
+                    // 验证必填字段
+                    if (!this.userForm.username || !this.userForm.password || !this.userForm.name || !this.userForm.email || !this.userForm.role) {
+                        ElMessage.error('请填写所有必要信息');
+                        return;
+                    }
+                    
+                    // 验证邮箱格式
+                    const emailPattern = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+                    if (!emailPattern.test(this.userForm.email)) {
+                        ElMessage.error('请输入正确的邮箱格式');
+                        return;
+                    }
+                    
+                    const userData = { ...this.userForm };
+                    if (this.userForm.role === 'expert' && this.expertiseInput) {
+                        userData.expertise = this.expertiseInput.split(',').map(s => s.trim()).filter(s => s);
+                    }
+                    
+                    try {
+                        const response = await axios.post('/api/users', userData);
+                        if (response.data.success) {
+                            ElMessage.success('用户添加成功');
+                            this.showAddUserDialog = false;
+                            this.userForm = { username: '', password: '', name: '', email: '', role: '' };
+                            this.expertiseInput = '';
+                            this.loadUsers();
+                        } else {
+                            ElMessage.error(response.data.message || '添加失败');
+                        }
+                    } catch (error) {
+                        console.error('添加用户错误:', error);
+                        if (error.response) {
+                            const status = error.response.status;
+                            const message = error.response.data?.message || '未知错误';
+                            
+                            if (status === 401) {
+                                ElMessage.error('登录已过期，请重新登录');
+                                this.logout();
+                            } else if (status === 400) {
+                                ElMessage.error(`请求错误: ${message}`);
+                            } else if (status === 422) {
+                                ElMessage.error(`数据验证失败: ${message}`);
+                            } else {
+                                ElMessage.error(`服务器错误 (${status}): ${message}`);
+                            }
+                        } else if (error.request) {
+                            ElMessage.error('网络连接失败，请检查服务器是否运行');
+                        } else {
+                            ElMessage.error('请求失败: ' + error.message);
+                        }
+                    }
+                },
+                
+                // 分配论文
+                async assignPaper(paperId) {
+                    try {
+                        const response = await axios.post(`/api/papers/${paperId}/assign`);
+                        if (response.data.success) {
+                            ElMessage.success('论文分配成功');
+                            this.loadPapers();
+                        } else {
+                            ElMessage.error(response.data.message);
+                        }
+                    } catch (error) {
+                        ElMessage.error('分配失败');
+                    }
+                },
+                
+                // 开始评审
+                startReview(assignment) {
+                    this.currentAssignment = assignment;
+                    this.reviewForm = {
+                        innovation_score: 0,
+                        feasibility_score: 0,
+                        quality_score: 0,
+                        value_score: 0,
+                        comments: ''
+                    };
+                    this.showReviewDialog = true;
+                },
+                
+                // 提交评审
+                async submitReview() {
+                    if (this.totalScore === 0) {
+                        ElMessage.error('请进行评分');
+                        return;
+                    }
+                    
+                    try {
+                        const response = await axios.post(`/api/assignments/${this.currentAssignment.id}/review`, this.reviewForm);
+                        if (response.data.success) {
+                            ElMessage.success('评审提交成功');
+                            this.showReviewDialog = false;
+                            this.loadMyAssignments();
+                        } else {
+                            ElMessage.error(response.data.message);
+                        }
+                    } catch (error) {
+                        ElMessage.error('提交失败');
+                    }
+                },
+                
+                // 查看论文详情
+                viewPaperDetails(paper) {
+                    ElMessageBox.alert(`
+                        <strong>标题:</strong> ${paper.title}<br>
+                        <strong>作者:</strong> ${paper.author}<br>
+                        <strong>研究领域:</strong> ${paper.field || '未指定'}<br>
+                        <strong>关键词:</strong> ${paper.keywords || '无'}<br>
+                        <strong>摘要:</strong> ${paper.abstract || '无'}<br>
+                        <strong>平均分:</strong> ${paper.avg_score || '暂无'}<br>
+                        <strong>评审进度:</strong> ${paper.review_count}/3
+                    `, '论文详情', {
+                        dangerouslyUseHTMLString: true
+                    });
+                },
+                
+                // 辅助方法
+                getStatusType(status) {
+                    const types = {
+                        'pending': 'info',
+                        'assigned': 'warning',
+                        'reviewing': 'primary',
+                        'completed': 'success'
+                    };
+                    return types[status] || 'info';
+                },
+                
+                getStatusText(status) {
+                    const texts = {
+                        'pending': '待分配',
+                        'assigned': '已分配',
+                        'reviewing': '评审中',
+                        'completed': '已完成'
+                    };
+                    return texts[status] || status;
+                },
+                
+                getRoleText(role) {
+                    const texts = {
+                        'admin': '管理员',
+                        'expert': '评审专家',
+                        'viewer': '查看者'
+                    };
+                    return texts[role] || role;
+                },
+                
+                getProgressLabel(key) {
+                    const labels = {
+                        'pending': '待分配',
+                        'assigned': '已分配',
+                        'reviewing': '评审中',
+                        'completed': '已完成'
+                    };
+                    return labels[key] || key;
+                }
+            }
+        }).use(ElementPlus).mount('#app');
+    </script>
+</body>
+</html>
