@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>论文评定系统</title>
+    <!-- 引入外部资源 -->
+    <link rel="stylesheet" href="https://unpkg.com/element-plus/dist/index.css"> <!-- Element Plus 样式 -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script> <!-- Vue 3 核心库 -->
+    <script src="https://unpkg.com/element-plus/dist/index.full.js"></script> <!-- Element Plus 组件库 -->
+    <script src="https://unpkg.com/axios/dist/axios.min.js"></script> <!-- 网络请求库 -->
+    <script src="https://unpkg.com/@element-plus/icons-vue/dist/index.iife.js"></script> <!-- Element Plus 图标库 -->
+    <style>
+        /* 全局样式配置 */
+        body {
+            margin: 0;
+            font-family: 'Helvetica Neue', Helvetica, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', '微软雅黑', Arial, sans-serif;
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); /* 渐变色头部 */
+            color: white;
+            padding: 0 20px;
+            box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1); /* 阴影效果 */
+        }
+        .main-container {
+            min-height: calc(100vh - 60px); /* 主体内容高度，减去头部高度 */
+            background: #f5f7fa;
+        }
+        .sidebar {
+            background: white;
+            min-height: calc(100vh - 60px);
+            box-shadow: 2px 0 6px rgba(0, 0, 0, 0.1); /* 侧边栏阴影 */
+        }
+        .content {
+            padding: 20px;
+            background: white;
+            margin: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1); /* 内容区卡片样式 */
+        }
+        /* 数据统计卡片样式 */
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        /* 登录页面样式 */
+        .login-container {
+            min-height: 100vh;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center; /* 垂直水平居中 */
+        }
+        .login-form {
+            background: white;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1); /* 登录表单阴影效果 */
+            width: 400px;
+        }
+        /* 评审表单样式 */
+        .review-form {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 20px;
+        }
+        .score-input {
+            margin-bottom: 15px; /* 评分输入项间距 */
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <!-- 登录页面 - 未登录时显示 -->
+        <div v-if="!isLoggedIn" class="login-container">
+            <div class="login-form">
+                <h2 style="text-align: center; margin-bottom: 30px; color: #333;">论文评定系统</h2>
+                <!-- 登录表单，使用Element Plus组件 -->
+                <el-form :model="loginForm" @submit.prevent="login">
+                    <el-form-item>
+                        <el-input v-model="loginForm.username" placeholder="用户名" size="large">
+                            <template #prefix>
+                                <el-icon><User /></el-icon> <!-- 用户名图标 -->
+                            </template>
+                        </el-input>
+                    </el-form-item>
+                    <el-form-item>
+                        <el-input v-model="loginForm.password" type="password" placeholder="密码" size="large">
+                            <template #prefix>
+                                <el-icon><Lock /></el-icon> <!-- 密码图标 -->
+                            </template>
+                        </el-input>
+                    </el-form-item>
+                    <el-form-item>
+                        <el-button type="primary" size="large" style="width: 100%;" @click="login" :loading="loginLoading">
+                            登录
+                        </el-button>
+                    </el-form-item>
+                </el-form>
+                <div style="text-align: center; margin-top: 20px; color: #666; font-size: 14px;">
+                    默认管理员账户: admin / admin123 <!-- 测试账户提示 -->
+                </div>
+            </div>
+        </div>
+
+        <!-- 主应用界面 - 登录后显示 -->
+        <div v-else>
+            <!-- 头部导航栏 -->
+            <el-header class="header" height="60px">
+                <el-row justify="space-between" align="middle" style="height: 100%;">
+                    <el-col :span="12">
+                        <h2 style="margin: 0;">论文评定系统</h2>
+                    </el-col>
+                    <el-col :span="12" style="text-align: right;">
+                        <span style="margin-right: 20px;">欢迎，{{ currentUser.name }}</span> <!-- 显示当前用户名 -->
+                        <el-button type="primary" plain @click="logout">退出登录</el-button>
+                    </el-col>
+                </el-row>
+            </el-header>
+
+            <!-- 主体内容区域 -->
+            <el-container class="main-container">
+                <!-- 侧边栏导航 -->
+                <el-aside width="200px" class="sidebar">
+                    <el-menu :default-active="activeMenu" @select="handleMenuSelect" style="border: none;">
+                        <el-menu-item index="dashboard">
+                            <el-icon><Odometer /></el-icon>
+                            <span>数据概览</span>
+                        </el-menu-item>
+                        <!-- 管理员权限菜单 -->
+                        <el-menu-item index="papers" v-if="currentUser.role === 'admin'">
+                            <el-icon><Document /></el-icon>
+                            <span>论文管理</span>
+                        </el-menu-item>
+                        <el-menu-item index="users" v-if="currentUser.role === 'admin'">
+                            <el-icon><User /></el-icon>
+                            <span>用户管理</span>
+                        </el-menu-item>
+                        <!-- 专家权限菜单 -->
+                        <el-menu-item index="assignments" v-if="currentUser.role === 'expert'">
+                            <el-icon><EditPen /></el-icon>
+                            <span>我的评审</span>
+                        </el-menu-item>
+                        <!-- 作者权限菜单 -->
+                        <el-menu-item index="my-papers" v-if="currentUser.role === 'author'">
+                            <el-icon><Document /></el-icon>
+                            <span>我的论文</span>
+                        </el-menu-item>
+                        <el-menu-item index="submit-paper" v-if="currentUser.role === 'author'">
+                            <el-icon><Plus /></el-icon>
+                            <span>提交论文</span>
+                        </el-menu-item>
+                        <el-menu-item index="statistics">
+                            <el-icon><DataAnalysis /></el-icon>
+                            <span>统计分析</span>
+                        </el-menu-item>
+                    </el-menu>
+                </el-aside>
+
+                <!-- 主内容区 -->
+                <el-main>
+                    <!-- 数据概览页面 -->
+                    <div v-if="activeMenu === 'dashboard'" class="content">
+                        <h3>数据概览</h3>
+                        <el-row :gutter="20">
+                            <!-- 统计卡片网格布局 -->
+                            <el-col :span="6">
+                                <div class="stat-card">
+                                    <div class="stat-number">{{ statistics.basic?.total_papers || 0 }}</div>
+                                    <div class="stat-label">论文总数</div>
+                                </div>
+                            </el-col>
+                            <el-col :span="6">
+                                <div class="stat-card">
+                                    <div class="stat-number">{{ statistics.basic?.total_experts || 0 }}</div>
+                                    <div class="stat-label">专家总数</div>
+                                </div>
+                            </el-col>
+                            <el-col :span="6">
+                                <div class="stat-card">
+                                    <div class="stat-number">{{ statistics.basic?.completed_papers || 0 }}</div>
+                                    <div class="stat-label">已完成评审</div>
+                                </div>
+                            </el-col>
+                            <el-col :span="6">
+                                <div class="stat-card">
+                                    <div class="stat-number">{{ statistics.basic?.total_reviews || 0 }}</div>
+                                    <div class="stat-label">评审总数</div>
+                                </div>
+                            </el-col>
+                        </el-row>
+                    </div>
+
+                    <!-- 论文管理页面 -->
+                    <div v-if="activeMenu === 'papers'" class="content">
+                        <el-row justify="space-between" align="middle" style="margin-bottom: 20px;">
+                            <h3>论文管理</h3>
+                            <el-button type="primary" @click="showAddPaperDialog = true">
+                                <el-icon><Plus /></el-icon>
+                                添加论文
+                            </el-button>
+                        </el-row>
+                        
+                        <!-- 论文列表表格 -->
+                        <el-table :data="papers" style="width: 100%">
+                            <el-table-column prop="title" label="标题" width="200" show-overflow-tooltip />
+                            <el-table-column prop="author" label="作者" width="120" />
+                            <el-table-column prop="field" label="研究领域" width="120" />
+                            <el-table-column prop="status" label="状态" width="100">
+                                <template #default="scope">
+                                    <!-- 根据状态显示不同颜色标签 -->
+                                    <el-tag :type="getStatusType(scope.row.status)">{{ getStatusText(scope.row.status) }}</el-tag>
+                                </template>
+                            </el-table-column>
+                            <el-table-column label="分配专家" width="200">
+                                <template #default="scope">
+                                    <div v-if="scope.row.experts.length > 0">
+                                        <!-- 循环显示分配的专家 -->
+                                        <el-tag v-for="expert in scope.row.experts" :key="expert.id" size="small" style="margin-right: 5px;">
+                                            {{ expert.name }}
+                                        </el-tag>
+                                    </div>
+                                    <span v-else style="color: #999;">未分配</span>
+                                </template>
+                            </el-table-column>
+                            <el-table-column prop="avg_score" label="平均分" width="100">
+                                <template #default="scope">
+                                    <span v-if="scope.row.avg_score">{{ scope.row.avg_score }}</span>
+                                    <span v-else style="color: #999;">-</span>
+                                </template>
+                            </el-table-column>
+                            <el-table-column label="操作" width="150">
+                                <template #default="scope">
+                                    <!-- 状态为待分配时显示分配按钮 -->
+                                    <el-button v-if="scope.row.status === 'pending'" type="primary" size="small" @click="assignPaper(scope.row.id)">
+                                        分配专家
+                                    </el-button>
+                                    <el-button type="info" size="small" @click="viewPaperDetails(scope.row)">
+                                        详情
+                                    </el-button>
+                                </template>
+                            </el-table-column>
+                        </el-table>
+                    </div>
+
+                    <!-- 其他页面（用户管理、我的评审、统计分析）结构类似，省略重复注释 -->
+                    <div v-if="activeMenu === 'users'" class="content">
+                        <el-row justify="space-between" align="middle" style="margin-bottom: 20px;">
+                            <h3>用户管理</h3>
+                            <el-button type="primary" @click="showAddUserDialog = true">
+                                <el-icon><Plus /></el-icon>
+                                添加用户
+                            </el-button>
+                        </el-row>
+                        
+                        <el-table :data="users" style="width: 100%">
+                            <el-table-column prop="username" label="用户名" width="120" />
+                            <el-table-column prop="name" label="姓名" width="120" />
+                            <el-table-column prop="email" label="邮箱" width="200" />
+                            <el-table-column prop="role" label="角色" width="100">
+                                <template #default="scope">
+                                    <el-tag :type="scope.row.role === 'admin' ? 'danger' : scope.row.role === 'expert' ? 'success' : 'info'">
+                                        {{ getRoleText(scope.row.role) }}
+                                    </el-tag>
+                                </template>
+                            </el-table-column>
+                            <el-table-column label="专业领域" width="200">
+                                <template #default="scope">
+                                    <el-tag v-for="field in scope.row.expertise" :key="field" size="small" style="margin-right: 5px;">
+                                        {{ field }}
+                                    </el-tag>
+                                </template>
+                            </el-table-column>
+                            <el-table-column prop="status" label="状态" width="100">
+                                <template #default="scope">
+                                    <el-tag :type="scope.row.status === 'active' ? 'success' : 'warning'">
+                                        {{ scope.row.status === 'active' ? '活跃' : '忙碌' }}
+                                    </el-tag>
+                                </template>
+                            </el-table-column>
+                        </el-table>
+                    </div>
+
+                    <div v-if="activeMenu === 'assignments'" class="content">
+                        <h3>我的评审任务</h3>
+                        <el-table :data="myAssignments" style="width: 100%">
+                            <el-table-column prop="paper.title" label="论文标题" width="250" show-overflow-tooltip />
+                            <el-table-column prop="paper.author" label="作者" width="120" />
+                            <el-table-column prop="paper.field" label="研究领域" width="120" />
+                            <el-table-column prop="status" label="状态" width="100">
+                                <template #default="scope">
+                                    <el-tag :type="scope.row.status === 'completed' ? 'success' : 'warning'">
+                                        {{ scope.row.status === 'completed' ? '已完成' : '待评审' }}
+                                    </el-tag>
+                                </template>
+                            </el-table-column>
+                            <el-table-column label="操作" width="150">
+                                <template #default="scope">
+                                    <el-button v-if="!scope.row.has_review" type="primary" size="small" @click="startReview(scope.row)">
+                                        开始评审
+                                    </el-button>
+                                    <el-button v-else type="info" size="small" disabled>
+                                        已评审
+                                    </el-button>
+                                </template>
+                            </el-table-column>
+                        </el-table>
+                    </div>
+
+                    <div v-if="activeMenu === 'statistics'" class="content">
+                        <h3>统计分析</h3>
+                        <el-row :gutter="20">
+                            <el-col :span="12">
+                                <el-card title="评审进度">
+                                    <div style="padding: 20px;">
+                                        <div v-for="(value, key) in statistics.progress" :key="key" style="margin-bottom: 10px;">
+                                            <span>{{ getProgressLabel(key) }}: </span>
+                                            <strong>{{ value }}</strong>
+                                        </div>
+                                    </div>
+                                </el-card>
+                            </el-col>
+                            <el-col :span="12">
+                                <el-card title="评分分布">
+                                    <div style="padding: 20px;">
+                                        <div v-for="(value, key) in statistics.score_distribution" :key="key" style="margin-bottom: 10px;">
+                                            <span>{{ key }}分: </span>
+                                            <strong>{{ value }}篇</strong>
+                                        </div>
+                                    </div>
+                                </el-card>
+                            </el-col>
+                        </el-row>
+                        
+                        <el-card title="专家工作量" style="margin-top: 20px;">
+                            <el-table :data="statistics.expert_workload" style="width: 100%">
+                                <el-table-column prop="name" label="专家姓名" />
+                                <el-table-column prop="current_assignments" label="当前任务" />
+                                <el-table-column prop="completed_reviews" label="已完成评审" />
+                                <el-table-column prop="total_assignments" label="总任务数" />
+                            </el-table>
+                        </el-card>
+                    </div>
+                </el-main>
+            </el-container>
+        </div>
+
+        <!-- 对话框组件 - 添加论文 -->
+        <el-dialog v-model="showAddPaperDialog" title="添加论文" width="600px">
+            <el-form :model="paperForm" label-width="100px">
+                <el-form-item label="论文标题" required>
+                    <el-input v-model="paperForm.title" placeholder="请输入论文标题" />
+                </el-form-item>
+                <el-form-item label="作者" required>
+                    <el-input v-model="paperForm.author" placeholder="请输入作者姓名" />
+                </el-form-item>
+                <el-form-item label="研究领域">
+                    <el-input v-model="paperForm.field" placeholder="请输入研究领域" />
+                </el-form-item>
+                <el-form-item label="关键词">
+                    <el-input v-model="paperForm.keywords" placeholder="请输入关键词，用逗号分隔" />
+                </el-form-item>
+                <el-form-item label="摘要">
+                    <el-input v-model="paperForm.abstract" type="textarea" :rows="4" placeholder="请输入论文摘要" />
+                </el-form-item>
+            </el-form>
+            <template #footer>
+                <el-button @click="showAddPaperDialog = false">取消</el-button>
+                <el-button type="primary" @click="addPaper">确定</el-button>
+            </template>
+        </el-dialog>
+
+        <!-- 添加用户对话框 -->
+        <el-dialog v-model="showAddUserDialog" title="添加用户" width="600px">
+            <el-form :model="userForm" label-width="100px">
+                <el-form-item label="用户名" required>
+                    <el-input v-model="userForm.username" placeholder="请输入用户名" />
+                </el-form-item>
+                <el-form-item label="密码" required>
+                    <el-input v-model="userForm.password" type="password" placeholder="请输入密码" />
+                </el-form-item>
+                <el-form-item label="姓名" required>
+                    <el-input v-model="userForm.name" placeholder="请输入真实姓名" />
+                </el-form-item>
+                <el-form-item label="邮箱" required>
+                    <el-input v-model="userForm.email" placeholder="请输入邮箱地址" />
+                </el-form-item>
+                <el-form-item label="角色" required>
+                    <el-select v-model="userForm.role" placeholder="请选择角色">
+                        <el-option label="管理员" value="admin" />
+                        <el-option label="评审专家" value="expert" />
+                        <el-option label="查看者" value="viewer" />
+                    </el-select>
+                </el-form-item>
+                <el-form-item label="专业领域" v-if="userForm.role === 'expert'">
+                    <el-input v-model="expertiseInput" placeholder="请输入专业领域，用逗号分隔" />
+                </el-form-item>
+            </el-form>
+            <template #footer>
+                <el-button @click="showAddUserDialog = false">取消</el-button>
+                <el-button type="primary" @click="addUser">确定</el-button>
+            </template>
+        </el-dialog>
+
+        <!-- 论文评审对话框 -->
+        <el-dialog v-model="showReviewDialog" title="论文评审" width="800px">
+            <div v-if="currentAssignment">
+                <h4>{{ currentAssignment.paper.title }}</h4>
+                <p><strong>作者:</strong> {{ currentAssignment.paper.author }}</p>
+                <p><strong>研究领域:</strong> {{ currentAssignment.paper.field }}</p>
+                <p><strong>关键词:</strong> {{ currentAssignment.paper.keywords }}</p>
+                <p><strong>摘要:</strong> {{ currentAssignment.paper.abstract }}</p>
+                
+                <div class="review-form">
+                    <h4>评分标准</h4>
+                    <el-form :model="reviewForm" label-width="120px">
+                        <!-- 评分滑块组件 -->
+                        <el-form-item label="学术创新性" class="score-input">
+                            <el-slider v-model="reviewForm.innovation_score" :max="30" show-input style="margin-right: 20px;" />
+                            <span style="color: #666; font-size: 12px;">（满分30分）</span>
+                        </el-form-item>
+                        <el-form-item label="技术可行性" class="score-input">
+                            <el-slider v-model="reviewForm.feasibility_score" :max="25" show-input style="margin-right: 20px;" />
+                            <span style="color: #666; font-size: 12px;">（满分25分）</span>
+                        </el-form-item>
+                        <el-form-item label="论文质量" class="score-input">
+                            <el-slider v-model="reviewForm.quality_score" :max="25" show-input style="margin-right: 20px;" />
+                            <span style="color: #666; font-size: 12px;">（满分25分）</span>
+                        </el-form-item>
+                        <el-form-item label="实用价值" class="score-input">
+                            <el-slider v-model="reviewForm.value_score" :max="20" show-input style="margin-right: 20px;" />
+                            <span style="color: #666; font-size: 12px;">（满分20分）</span>
+                        </el-form-item>
+                        <el-form-item label="总分">
+                            <el-input :value="totalScore" readonly style="width: 100px;" />
+                            <span style="margin-left: 10px; color: #666;">/ 100分</span>
+                        </el-form-item>
+                        <el-form-item label="评审意见">
+                            <el-input v-model="reviewForm.comments" type="textarea" :rows="4" placeholder="请输入评审意见" />
+                        </el-form-item>
+                    </el-form>
+                </div>
+            </div>
+            <template #footer>
+                <el-button @click="showReviewDialog = false">取消</el-button>
+                <el-button type="primary" @click="submitReview">提交评审</el-button>
+            </template>
+        </el-dialog>
+    </div>
