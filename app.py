@@ -20,7 +20,7 @@ app.config['UPLOAD_FOLDER'] = 'uploads'
 
 # 确保上传目录存在
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
-
+####
 db = SQLAlchemy(app)
 CORS(app)
 jwt = JWTManager(app)
