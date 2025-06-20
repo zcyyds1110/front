@@ -112,7 +112,65 @@ def login():
         })
     
     return jsonify({'success': False, 'message': '用户名或密码错误'}), 401
-
+@app.route('/api/users', methods=['POST'])
+@jwt_required()
+def create_user():
+    try:
+        data = request.get_json()
+        
+        # 验证必填字段
+        required_fields = ['username', 'password', 'name', 'email', 'role']
+        for field in required_fields:
+            if not data.get(field) or not data.get(field).strip():
+                return jsonify({'success': False, 'message': f'缺少必要字段: {field}'}), 400
+        
+        # 验证用户名长度
+        if len(data['username']) < 3:
+            return jsonify({'success': False, 'message': '用户名至少需要3个字符'}), 400
+        
+        # 验证密码长度
+        if len(data['password']) < 6:
+            return jsonify({'success': False, 'message': '密码至少需要6个字符'}), 400
+        
+        # 验证邮箱格式
+        import re
+        email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+        if not re.match(email_pattern, data['email']):
+            return jsonify({'success': False, 'message': '邮箱格式不正确'}), 400
+        
+        # 验证角色
+        valid_roles = ['admin', 'expert', 'author']
+        if data['role'] not in valid_roles:
+            return jsonify({'success': False, 'message': f'无效的角色，必须是: {", ".join(valid_roles)}'}), 400
+        
+        # 检查用户名是否已存在
+        if User.query.filter_by(username=data['username']).first():
+            return jsonify({'success': False, 'message': '用户名已存在'}), 400
+        
+        # 检查邮箱是否已存在
+        if User.query.filter_by(email=data['email']).first():
+            return jsonify({'success': False, 'message': '邮箱已被使用'}), 400
+        
+        # 创建用户
+        user = User(
+            username=data['username'].strip(),
+            password_hash=generate_password_hash(data['password']),
+            name=data['name'].strip(),
+            email=data['email'].strip().lower(),
+            role=data['role'],
+            expertise=json.dumps(data.get('expertise', [])),
+            status=data.get('status', 'active')
+        )
+        
+        db.session.add(user)
+        db.session.commit()
+        
+        return jsonify({'success': True, 'message': '用户创建成功'})
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"创建用户时发生错误: {str(e)}")  # 在服务器控制台打印详细错误
+        return jsonify({'success': False, 'message': f'创建用户失败: {str(e)}'}), 500
 # 用户管理API
 @app.route('/api/users', methods=['GET'])
 @jwt_required()
