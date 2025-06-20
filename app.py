@@ -30,7 +30,7 @@ class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
     password_hash = db.Column(db.String(120), nullable=False)
-    role = db.Column(db.String(20), nullable=False)  # admin, expert, viewer
+    role = db.Column(db.String(20), nullable=False)  # admin, expert, author
     name = db.Column(db.String(100), nullable=False)
     email = db.Column(db.String(120), unique=True, nullable=False)
     expertise = db.Column(db.Text)  # 专业领域，JSON格式
@@ -237,10 +237,19 @@ def get_papers():
 @jwt_required()
 def create_paper():
     data = request.get_json()
+    current_user_id = get_jwt_identity()
+    current_user = User.query.get(current_user_id)
     
+    # 检查用户权限，只有管理员和作者可以提交论文
+    if current_user.role not in ['admin', 'author']:
+        return jsonify({'success': False, 'message': '您没有权限提交论文'}), 403
+    # 如果是作者提交，自动使用作者的姓名
+    author_name = data['author']
+    if current_user.role == 'author':
+        author_name = current_user.name
     paper = Paper(
         title=data['title'],
-        author=data['author'],
+        author=author_name,
         abstract=data.get('abstract', ''),
         keywords=data.get('keywords', ''),
         field=data.get('field', '')

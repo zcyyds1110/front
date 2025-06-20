@@ -147,6 +147,14 @@
                             <el-icon><EditPen /></el-icon>
                             <span>我的评审</span>
                         </el-menu-item>
+                        <el-menu-item index="my-papers" v-if="currentUser.role === 'author'">
+                            <el-icon><Document /></el-icon>
+                            <span>我的论文</span>
+                        </el-menu-item>
+                        <el-menu-item index="submit-paper" v-if="currentUser.role === 'author'">
+                            <el-icon><Plus /></el-icon>
+                            <span>提交论文</span>
+                        </el-menu-item>
                         <el-menu-item index="statistics">
                             <el-icon><DataAnalysis /></el-icon>
                             <span>统计分析</span>
